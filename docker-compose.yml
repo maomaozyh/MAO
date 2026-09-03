@@ -1,0 +1,72 @@
+# 后端运行所需的基础设施服务（Java 微服务本身在宿主机通过 mvn / IDE 启动，
+# 通过 localhost 访问下方发布的端口：redis 6379、nacos 8848、rabbitmq 5672）。
+# 启动：docker compose up -d
+#
+# 说明：Nacos 使用内嵌 Derby 数据库（无需外部 MySQL）。
+# 微服务业务库使用宿主机 MySQL（localhost:3306，root/123456，库 yu_ai_code_mother）。
+#
+# 宿主机前置依赖（无法容器化，需自行安装）：
+#   - Chromium / Chrome：截图服务（mao-ai-code-screenshot）生成本地网页截图需要浏览器。
+#   - JDK 17+、Maven、Node 18+（前端）。
+#   - 有效的 LLM api-key（application.yml 已填写）与腾讯云 COS 配置（用于应用封面图）。
+#   - MySQL 8（localhost:3306，root/123456，已建库 yu_ai_code_mother 及表）。
+
+services:
+  redis:
+    image: redis:7.0
+    container_name: mao-ai-code-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: mao-ai-code-nacos
+    environment:
+      MODE: "standalone"
+      PREFER_HOST_MODE: "hostname"
+      SPRING_DATASOURCE_PLATFORM: ""
+    ports:
+      # 控制台 / Dubbo 注册发现
+      - "8848:8848"
+      # Nacos 2.x gRPC 通信端口（Dubbo 3 tri 协议需要）
+      - "9848:9848"
+      - "9849:9849"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/health/reading"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: mao-ai-code-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local

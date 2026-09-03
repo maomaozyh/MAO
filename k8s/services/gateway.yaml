@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mao-ai-code-gateway
+  namespace: yu-ai-code
+  labels:
+    app: mao-ai-code-gateway
+    app.kubernetes.io/part-of: mao-ai-code-mother
+spec:
+  replicas: 1
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: mao-ai-code-gateway
+  template:
+    metadata:
+      labels:
+        app: mao-ai-code-gateway
+    spec:
+      # SSE 流式接口（AI 对话）连接时间长，停机时留足时间让流正常结束
+      terminationGracePeriodSeconds: 90
+      # 网关路由指向 user / app 两个后端，启动时先等它们就绪
+      initContainers:
+        - name: wait-for-user
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z mao-ai-code-user 8124; do echo "waiting for user..."; sleep 2; done']
+        - name: wait-for-app
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z mao-ai-code-app 8125; do echo "waiting for app..."; sleep 2; done']
+      containers:
+        - name: mao-ai-code-gateway
+          image: yu-ai-code/gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8123
+          envFrom:
+            - configMapRef:
+                name: mao-ai-code-config
+            - secretRef:
+                name: mao-ai-code-secret
+          startupProbe:
+            tcpSocket:
+              port: 8123
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 8123
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8123
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ['sh', '-c', 'sleep 10']
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mao-ai-code-gateway
+  namespace: yu-ai-code
+  labels:
+    app: mao-ai-code-gateway
+spec:
+  selector:
+    app: mao-ai-code-gateway
+  ports:
+    - port: 8123
+      targetPort: 8123
+  type: ClusterIP

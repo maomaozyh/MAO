@@ -1,0 +1,73 @@
+### CUSTOM ###
+application-local.yml
+application-prod.yml
+tmp
+.workbuddy/
+
+### build output ###
+node_modules/
+dist/
+dist_old*/
+.verify-dist/
+target/
+META-INF/
+
+### logs ###
+*.log
+*.err
+
+### stray files ###
+新建 文本文档 (2).txt
+stop
+ui_restored_optimized.html
+.DS_Store
+*.bak
+
+### secret / credential files (DO NOT COMMIT) ###
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.key
+id_rsa*
+.env.local
+.env.*.local
+
+### nested gitee clone (do not commit) ###
+zero-code-workflow/
+
+
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/

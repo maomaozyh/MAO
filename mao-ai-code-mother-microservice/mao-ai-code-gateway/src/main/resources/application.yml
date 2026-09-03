@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: mao-ai-code-gateway
+  main:
+    web-application-type: reactive
+  # 允许网关转发较大的上传请求（视频等素材）
+  codec:
+    max-in-memory-size: 209715200
+  cloud:
+    # 当前 Spring Cloud 版本与 Spring Boot 3.5 存在兼容性校验提示，关闭以避免启动失败
+    compatibility-verifier:
+      enabled: false
+    gateway:
+      # SSE 流式接口（AI 对话）需要较长的响应超时
+      httpclient:
+        connect-timeout: 10000
+        response-timeout: 10m
+      # 全局跨域配置（前端直接调用 API 时需要，使用 Vite 代理时不会触发）
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "http://localhost:5173"
+              - "http://localhost:8123"
+            allowedMethods:
+              - "*"
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+      routes:
+        # 用户服务
+        - id: user-service
+          uri: ${USER_SERVICE_URI:http://localhost:8124}
+          predicates:
+            - Path=/api/user/**
+        # 应用服务（应用、对话历史、静态资源预览）
+        - id: app-service
+          uri: ${APP_SERVICE_URI:http://localhost:8125}
+          predicates:
+             - Path=/api/app/**, /api/chatHistory/**, /api/static/**, /api/skill/**, /api/material/**, /api/materialFolder/**, /api/payment/**, /api/community/**, /api/admin/**
+
+server:
+  port: 8123

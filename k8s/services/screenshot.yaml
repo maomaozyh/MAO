@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mao-ai-code-screenshot
+  namespace: yu-ai-code
+  labels:
+    app: mao-ai-code-screenshot
+    app.kubernetes.io/part-of: mao-ai-code-mother
+spec:
+  replicas: 1
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: mao-ai-code-screenshot
+  template:
+    metadata:
+      labels:
+        app: mao-ai-code-screenshot
+    spec:
+      terminationGracePeriodSeconds: 60
+      # 截图服务通过 Dubbo 注册到 Nacos，启动前需等注册中心就绪
+      initContainers:
+        - name: wait-for-nacos
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z nacos 8848; do echo "waiting for nacos..."; sleep 2; done']
+      containers:
+        - name: mao-ai-code-screenshot
+          image: yu-ai-code/screenshot:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8127
+          envFrom:
+            - configMapRef:
+                name: mao-ai-code-config
+            - secretRef:
+                name: mao-ai-code-secret
+          startupProbe:
+            tcpSocket:
+              port: 8127
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 8127
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8127
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ['sh', '-c', 'sleep 10']
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mao-ai-code-screenshot
+  namespace: yu-ai-code
+  labels:
+    app: mao-ai-code-screenshot
+spec:
+  selector:
+    app: mao-ai-code-screenshot
+  ports:
+    - port: 8127
+      targetPort: 8127
+  type: ClusterIP

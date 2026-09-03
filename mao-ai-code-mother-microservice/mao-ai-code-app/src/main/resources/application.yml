@@ -1,0 +1,171 @@
+spring:
+  application:
+    name: mao-ai-code-app
+  # session
+  session:
+    store-type: redis
+    # 30 days expire
+    timeout: 2592000
+  # mysql
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:yu_ai_code_mother}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:123456}
+  # redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      password: ${REDIS_PASSWORD:}
+      ttl: 3600
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+  # rabbitmq
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
+    connection-timeout: 15s
+    # 生产者确认：确保消息真正到达交换机；未路由到队列时触发 returns 回调
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: auto
+        # 消费失败不再无限重新入队：交由死信交换机转入死信队列，避免打满消费者
+        default-requeue-rejected: false
+        # AI 任务耗时较长，每次只预取 1 条，避免消息堆积在单个实例
+        prefetch: 1
+        concurrency: 2
+        max-concurrency: 8
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 3s
+          multiplier: 2
+          max-interval: 30s
+  profiles:
+    active: local
+  # 优雅停机最长等待时间，需小于 k8s 的 terminationGracePeriodSeconds（90s）
+  lifecycle:
+    timeout-per-shutdown-phase: 60s
+  # 文件上传大小限制（素材支持图片/视频/音频/3D 等，视频通常较大）
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+server:
+  port: 8125
+  # 优雅停机：配合 k8s 的 preStop 与 terminationGracePeriodSeconds，
+  # 让 AI 代码生成等长任务在 Pod 终止前有机会执行完，而不是被直接中断
+  shutdown: graceful
+  servlet:
+    context-path: /api
+    # 30 days expire
+    session:
+      cookie:
+        max-age: 2592000
+# 应用部署域名（部署后返回的访问地址前缀，需能通过网关 /api/static 访问到部署文件）
+code:
+  deploy-host: ${CODE_DEPLOY_HOST:http://localhost:8123/api}
+# AI
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: ${AI_API_KEY:}
+      model-name: qwen-plus
+      max-tokens: 8192
+      log-requests: true
+      log-responses: true
+    streaming-chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: ${AI_API_KEY:}
+      model-name: qwen-plus
+      max-tokens: 8192
+      log-requests: true
+      log-responses: true
+    # 推理 AI 模型配置（用于复杂的推理任务）
+    reasoning-streaming-chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: ${AI_API_KEY:}
+      model-name: qwen-plus
+      max-tokens: 32768
+      temperature: 0.1
+      log-requests: true
+      log-responses: true
+    # 智能路由 AI 模型配置
+    routing-chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: ${AI_API_KEY:}
+      model-name: qwen-turbo
+      max-tokens: 100
+      log-requests: true
+      log-responses: true
+    # 向量嵌入模型（供 Milvus 向量库使用；维度需与 milvus.dimension 一致）
+    embedding-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: ${AI_API_KEY:}
+      model-name: text-embedding-v3
+      log-requests: true
+      log-responses: true
+# Milvus 向量数据库（MilvusVectorStoreConfig 读取此节）
+milvus:
+  host: ${MILVUS_HOST:localhost}
+  port: ${MILVUS_PORT:19530}
+  collection-name: ${MILVUS_COLLECTION:yu_ai_knowledge}
+  dimension: ${MILVUS_DIMENSION:1024}
+  index-type: ${MILVUS_INDEX_TYPE:HNSW}
+  metric-type: ${MILVUS_METRIC_TYPE:COSINE}
+# RAG 检索增强（AiCodeGeneratorServiceFactory 读取）
+rag:
+  top-k: ${RAG_TOP_K:5}
+  min-score: ${RAG_MIN_SCORE:0.75}
+# springdoc-openapi
+springdoc:
+  group-configs:
+    - group: 'default'
+      packages-to-scan: com.mao.maocodemother.controller
+# knife4j
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+# Dubbo
+dubbo:
+  registry:
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://127.0.0.1:8848?username=nacos&password=nacos}
+    register-mode: instance
+  protocol:
+    name: tri
+    port: 50053
+  consumer:
+    timeout: 120000
+  provider:
+    timeout: 120000
+# 添加 COS 对象存储配置（用于素材上传）
+cos:
+  client:
+    host: ${COS_HOST:}
+    secretId: ${COS_SECRET_ID:}
+    secretKey: ${COS_SECRET_KEY:}
+    region: ${COS_REGION:ap-guangzhou}
+    bucket: ${COS_BUCKET:}
+# 支付渠道：MOCK（沙箱，默认） / REAL（接真实支付 API，见 RealPaymentChannel）
+payment:
+  channel: ${PAYMENT_CHANNEL:MOCK}
+  real:
+    appId: ${PAYMENT_REAL_APP_ID:}
+    appKey: ${PAYMENT_REAL_APP_KEY:}
+    gatewayUrl: ${PAYMENT_REAL_GATEWAY_URL:}
+    notifyUrl: ${PAYMENT_REAL_NOTIFY_URL:}

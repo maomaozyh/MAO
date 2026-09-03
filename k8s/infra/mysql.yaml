@@ -1,0 +1,216 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-initdb
+  namespace: yu-ai-code
+  labels:
+    app.kubernetes.io/part-of: mao-ai-code-mother
+data:
+  init.sql: |
+    create database if not exists yu_ai_code_mother;
+    use yu_ai_code_mother;
+
+    -- 用户表
+    create table if not exists user
+    (
+        id           bigint auto_increment comment 'id' primary key,
+        userAccount  varchar(256)                           not null comment '账号',
+        userPassword varchar(512)                           not null comment '密码',
+        userName     varchar(256)                           null comment '用户昵称',
+        userAvatar   varchar(1024)                          null comment '用户头像',
+        userProfile  varchar(512)                           null comment '用户简介',
+        userRole     varchar(256) default 'user'            not null comment '用户角色：user/admin',
+        editTime     datetime     default CURRENT_TIMESTAMP not null comment '编辑时间',
+        createTime   datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
+        updateTime   datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+        isDelete     tinyint      default 0                 not null comment '是否删除',
+        UNIQUE KEY uk_userAccount (userAccount),
+        INDEX idx_userName (userName)
+    ) comment '用户' collate = utf8mb4_unicode_ci;
+
+    -- 应用表
+    create table if not exists app
+    (
+        id           bigint auto_increment comment 'id' primary key,
+        appName      varchar(256)                       null comment '应用名称',
+        cover        varchar(512)                       null comment '应用封面',
+        initPrompt   text                               null comment '应用初始化的 prompt',
+        codeGenType  varchar(64)                        null comment '代码生成类型（枚举）',
+        deployKey    varchar(64)                        null comment '部署标识',
+        deployedTime datetime                           null comment '部署时间',
+        lastOpenTime datetime                           null comment '最近打开时间（用于“最近项目”排序与同步）',
+        priority     int      default 0                 not null comment '优先级',
+        userId       bigint                             not null comment '创建用户id',
+        editTime     datetime default CURRENT_TIMESTAMP not null comment '编辑时间',
+        createTime   datetime default CURRENT_TIMESTAMP not null comment '创建时间',
+        updateTime   datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+        isDelete     tinyint  default 0                 not null comment '是否删除',
+        UNIQUE KEY uk_deployKey (deployKey),
+        INDEX idx_appName (appName),
+        INDEX idx_userId (userId)
+    ) comment '应用' collate = utf8mb4_unicode_ci;
+
+    -- 对话历史表
+    create table if not exists chat_history
+    (
+        id          bigint auto_increment comment 'id' primary key,
+        message     text                               not null comment '消息',
+        messageType varchar(32)                        not null comment 'user/ai',
+        appId       bigint                             not null comment '应用id',
+        userId      bigint                             not null comment '创建用户id',
+        createTime  datetime default CURRENT_TIMESTAMP not null comment '创建时间',
+        updateTime  datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+        isDelete    tinyint  default 0                 not null comment '是否删除',
+        INDEX idx_appId (appId),
+        INDEX idx_createTime (createTime),
+        INDEX idx_appId_createTime (appId, createTime)
+    ) comment '对话历史' collate = utf8mb4_unicode_ci;
+
+    -- 技能中心 - 技能表
+    CREATE TABLE IF NOT EXISTS `skill` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+        `skillName` VARCHAR(256) NOT NULL COMMENT '技能名称',
+        `skillDesc` VARCHAR(1024) DEFAULT NULL COMMENT '技能描述',
+        `icon` VARCHAR(64) DEFAULT NULL COMMENT '图标',
+        `category` VARCHAR(64) NOT NULL COMMENT '分类',
+        `price` VARCHAR(32) DEFAULT '免费' COMMENT '价格',
+        `originalPrice` VARCHAR(32) DEFAULT NULL COMMENT '原价',
+        `priceUnit` VARCHAR(32) DEFAULT NULL COMMENT '价格单位',
+        `tags` VARCHAR(512) DEFAULT NULL COMMENT '标签(逗号分隔)',
+        `usageCount` BIGINT DEFAULT 0 COMMENT '使用次数',
+        `status` INT DEFAULT 1 COMMENT '状态(0-下架 1-上架)',
+        `userId` BIGINT NOT NULL COMMENT '创建用户ID',
+        `editTime` DATETIME DEFAULT NULL COMMENT '编辑时间',
+        `createTime` DATETIME DEFAULT NULL COMMENT '创建时间',
+        `updateTime` DATETIME DEFAULT NULL COMMENT '更新时间',
+        `isDelete` TINYINT DEFAULT 0 COMMENT '是否删除',
+        PRIMARY KEY (`id`),
+        INDEX `idx_category` (`category`),
+        INDEX `idx_userId` (`userId`),
+        INDEX `idx_skillName` (`skillName`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4_unicode_ci COMMENT='技能表';
+
+    -- 素材库 - 素材表
+    CREATE TABLE IF NOT EXISTS `material` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+        `materialName` VARCHAR(256) NOT NULL COMMENT '素材名称',
+        `fileUrl` VARCHAR(1024) NOT NULL COMMENT '文件URL',
+        `fileType` VARCHAR(32) NOT NULL COMMENT '文件类型',
+        `fileSize` BIGINT DEFAULT 0 COMMENT '文件大小(字节)',
+        `folderId` BIGINT DEFAULT NULL COMMENT '文件夹ID',
+        `tags` VARCHAR(512) DEFAULT NULL COMMENT '标签(逗号分隔)',
+        `userId` BIGINT NOT NULL COMMENT '上传用户ID',
+        `editTime` DATETIME DEFAULT NULL COMMENT '编辑时间',
+        `createTime` DATETIME DEFAULT NULL COMMENT '创建时间',
+        `updateTime` DATETIME DEFAULT NULL COMMENT '更新时间',
+        `isDelete` TINYINT DEFAULT 0 COMMENT '是否删除',
+        PRIMARY KEY (`id`),
+        INDEX `idx_userId` (`userId`),
+        INDEX `idx_fileType` (`fileType`),
+        INDEX `idx_folderId` (`folderId`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4_unicode_ci COMMENT='素材表';
+
+    -- 素材库 - 文件夹表
+    CREATE TABLE IF NOT EXISTS `material_folder` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+        `folderName` VARCHAR(256) NOT NULL COMMENT '文件夹名称',
+        `userId` BIGINT NOT NULL COMMENT '创建用户ID',
+        `createTime` DATETIME DEFAULT NULL COMMENT '创建时间',
+        `updateTime` DATETIME DEFAULT NULL COMMENT '更新时间',
+        `isDelete` TINYINT DEFAULT 0 COMMENT '是否删除',
+        PRIMARY KEY (`id`),
+        INDEX `idx_userId` (`userId`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4_unicode_ci COMMENT='素材文件夹表';
+
+    -- 交易订单（支付沙箱 / 真实支付渠道共用）
+    CREATE TABLE IF NOT EXISTS `trade_order` (
+        `id` BIGINT NOT NULL COMMENT '主键（雪花算法）',
+        `orderNo` VARCHAR(64) NOT NULL COMMENT '商户订单号',
+        `userId` BIGINT NOT NULL COMMENT '用户ID',
+        `productType` VARCHAR(64) DEFAULT NULL COMMENT '商品类型：MEMBERSHIP / SECONDS / CARD',
+        `productCode` VARCHAR(64) DEFAULT NULL COMMENT '商品编码',
+        `productName` VARCHAR(256) DEFAULT NULL COMMENT '商品名称',
+        `quantity` INT DEFAULT NULL COMMENT '购买数量',
+        `amount` DECIMAL(10,2) DEFAULT NULL COMMENT '订单金额',
+        `currency` VARCHAR(16) DEFAULT NULL COMMENT '币种',
+        `status` VARCHAR(32) DEFAULT NULL COMMENT '订单状态：PENDING / PAID',
+        `channel` VARCHAR(32) DEFAULT NULL COMMENT '支付渠道：MOCK / REAL',
+        `payTradeNo` VARCHAR(128) DEFAULT NULL COMMENT '渠道交易流水号',
+        `expireTime` DATETIME DEFAULT NULL COMMENT '订单过期时间',
+        `payTime` DATETIME DEFAULT NULL COMMENT '支付时间',
+        `createTime` DATETIME DEFAULT NULL COMMENT '创建时间',
+        `updateTime` DATETIME DEFAULT NULL COMMENT '更新时间',
+        `isDelete` TINYINT DEFAULT 0 COMMENT '是否删除',
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `uk_orderNo` (`orderNo`),
+        INDEX `idx_userId` (`userId`),
+        INDEX `idx_status` (`status`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4_unicode_ci COMMENT='交易订单表';
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: yu-ai-code
+  labels:
+    app: mysql
+    app.kubernetes.io/part-of: mao-ai-code-mother
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mao-ai-code-secret
+                  key: MYSQL_PASSWORD
+            - name: TZ
+              valueFrom:
+                configMapKeyRef:
+                  name: mao-ai-code-config
+                  key: TZ
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: initdb
+          configMap:
+            name: mysql-initdb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: yu-ai-code
+  labels:
+    app: mysql
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+  type: ClusterIP

@@ -1,0 +1,185 @@
+spring:
+  application:
+    name: mao-ai-code-mother-backend
+  # session 配置
+  session:
+    store-type: redis
+    # session 30 天过期
+    timeout: 2592000
+  # 文件上传大小限制（素材库支持单文件 ≤ 200MB）
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 210MB
+  # mysql
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/yu_ai_code_mother
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
+    # HikariCP 连接池调优（默认 max 10 无超时，压测/并发下会排队卡请求）
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 3000
+      max-lifetime: 1800000
+      idle-timeout: 600000
+      # 连接泄漏检测：借出超过 60s 未归还的连接打 WARN 日志
+      leak-detection-threshold: 60000
+  # redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      password: ${REDIS_PASSWORD:}
+      ttl: 3600 # 缓存过期时间（秒）
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+  profiles:
+    active: local
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+    # cookie 30 天过期
+    session:
+      cookie:
+        max-age: 2592000
+# springdoc-openapi
+springdoc:
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.mao.maocodemother.controller
+# knife4j
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+# AI
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      model-name: deepseek-chat
+#      strict-json-schema: true
+#      response-format: json_object
+      max-tokens: 8192
+      log-requests: true
+      log-responses: true
+      max-retries: 3
+    streaming-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      model-name: deepseek-chat
+      max-tokens: 8192
+      log-requests: true
+      log-responses: true
+    # 推理 AI 模型配置（用于复杂的推理任务）
+    reasoning-streaming-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      model-name: deepseek-reasoner
+      max-tokens: 32768
+      temperature: 0.1
+      log-requests: true
+      log-responses: true
+    # 智能路由 AI 模型配置（用于简单的分类任务）
+    # 原走 dashscope qwen-turbo，但该 key 已失效（401 invalid_api_key），
+    # 分类任务对模型要求低，切到已验证可用的 DeepSeek，避免创建应用路由报错。
+    routing-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      model-name: deepseek-chat
+      max-tokens: 100
+      log-requests: true
+      log-responses: true
+# 添加 COS 对象存储配置（需要从腾讯云获取；真实桶名/密钥通过环境变量或 application-local.yml 注入）
+cos:
+  client:
+    host: ${COS_HOST:}
+    secretId: ${COS_SECRET_ID:}
+    secretKey: ${COS_SECRET_KEY:}
+    region: ${COS_REGION:ap-guangzhou}
+    bucket: ${COS_BUCKET:}
+# Pexels 图片搜索配置
+pexels:
+  api-key: ${PEXELS_API_KEY:}
+# ============ 外部 AI 服务密钥（预留位置，后续自行填入） ============
+# 阿里云 DashScope 配置（图像生成 / 视频生成 / PPT 大纲 共用同一个 Key）
+# 【预留位置】把 api-key 替换为你的 DashScope Key（sk-ws-... 开头）。
+#   - image-model：图像生成模型（通义万相文生图）
+#   - video-model：视频生成模型（通义万相文生视频，需 Key 有视频权限）
+#   - chat-model：PPT 大纲生成所用的对话模型
+dashscope:
+  api-key: ${DASHSCOPE_API_KEY:}
+  image-model: wan2.2-t2i-flash
+  video-model: wanx2.1-t2v-turbo
+  chat-model: qwen-turbo
+
+# Tripo3D（文生 3D 模型）配置，用于「3D 模型」快捷入口
+# 【预留位置】二选一填入 Key：
+#   方式 A：直接把下面的值换成你的 Tripo3D Key（sk-... 开头）
+#   方式 B：保留 ${TRIPO_API_KEY:}，改为设置环境变量 TRIPO_API_KEY=你的Key 再启动
+#   留空时调用「3D 模型」会返回明确提示「3D 生成 API Key 未配置」，不会崩溃
+tripo:
+  api-key: ${TRIPO_API_KEY:}
+  base-url: https://api.tripo3d.ai/v2/openapi
+  poll-interval-ms: 5000
+# 短信验证码登录配置
+sms:
+  enabled: ${SMS_ENABLED:false}
+  access-key-id: ${SMS_ACCESS_KEY_ID:}
+  access-key-secret: ${SMS_ACCESS_KEY_SECRET:}
+  sign-name: ${SMS_SIGN_NAME:}
+  template-code: ${SMS_TEMPLATE_CODE:}
+  endpoint: ${SMS_ENDPOINT:dysmsapi.aliyuncs.com}
+# 邮箱验证码找回密码配置
+mail:
+  enabled: ${MAIL_ENABLED:false}
+# 微信扫码登录（开放平台 OAuth2）配置
+oauth:
+  wechat:
+    app-id: ${WECHAT_APP_ID:}
+    app-secret: ${WECHAT_APP_SECRET:}
+    # 回调地址（需与微信开放平台配置一致）
+    redirect-uri: ${WECHAT_REDIRECT_URI:http://localhost:8123/api/user/login/wechat/callback}
+  # QQ 互联扫码登录（OAuth2）配置
+  qq:
+    app-id: ${QQ_APP_ID:}
+    app-secret: ${QQ_APP_SECRET:}
+    # 回调地址（需与 QQ 互联平台配置一致）
+    redirect-uri: ${QQ_REDIRECT_URI:http://localhost:8123/api/user/login/qq/callback}
+# 监控
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+# ============ 支付配置 ============
+# 支付渠道：MOCK（沙箱，前端直接 mock-pay 完成）/ REAL（真实渠道，见下方支付宝）
+# 默认 MOCK，本地开发无需任何密钥即可跑通下单 + 支付流程。
+payment:
+  channel: MOCK
+  # 真实渠道（支付宝电脑网站支付）配置，仅当 payment.channel=REAL 时生效。
+  # 【预留位置】把下列值替换为你的支付宝开放平台配置（应用私钥 / 支付宝公钥 / 网关 / 异步回调地址）。
+  #   应用私钥：开发者自己保存的 PKCS8 私钥（-----BEGIN PRIVATE KEY----- ...）
+  #   支付宝公钥：开放平台「应用信息 > 开发设置 > 加签方式」里的「支付宝公钥」（不是应用公钥）
+  #   异步回调地址：公网可访问的 https 地址，例如 https://你的域名/api/payment/notify
+  alipay:
+    appId: ${ALIPAY_APP_ID:}
+    appPrivateKey: ${ALIPAY_APP_PRIVATE_KEY:}
+    alipayPublicKey: ${ALIPAY_PUBLIC_KEY:}
+    gatewayUrl: ${ALIPAY_GATEWAY_URL:https://openapi.alipay.com/gateway.do}
+    notifyUrl: ${ALIPAY_NOTIFY_URL:}
+    returnUrl: ${ALIPAY_RETURN_URL:}

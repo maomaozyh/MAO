@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mao-ai-code-app
+  namespace: yu-ai-code
+  labels:
+    app: mao-ai-code-app
+    app.kubernetes.io/part-of: mao-ai-code-mother
+spec:
+  replicas: 1
+  # 新 Pod 就绪后再观察 10s，避免滚动过快把流量打到刚启动还没预热的实例
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: mao-ai-code-app
+  template:
+    metadata:
+      labels:
+        app: mao-ai-code-app
+    spec:
+      # 优雅停机：AI 代码生成任务耗时较长，预留足够时间让进行中的任务收尾
+      terminationGracePeriodSeconds: 90
+      # 等待依赖中间件就绪，避免冷启动时应用崩溃重启循环
+      initContainers:
+        - name: wait-for-mysql
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z mysql 3306; do echo "waiting for mysql..."; sleep 2; done']
+        - name: wait-for-redis
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z redis 6379; do echo "waiting for redis..."; sleep 2; done']
+        - name: wait-for-rabbitmq
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z rabbitmq 5672; do echo "waiting for rabbitmq..."; sleep 2; done']
+        - name: wait-for-nacos
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z nacos 8848; do echo "waiting for nacos..."; sleep 2; done']
+      containers:
+        - name: mao-ai-code-app
+          image: yu-ai-code/app:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8125
+          envFrom:
+            - configMapRef:
+                name: mao-ai-code-config
+            - secretRef:
+                name: mao-ai-code-secret
+          # 启动探针：Spring Boot + Dubbo + 向量库初始化较慢，给足启动时间，避免启动期被误杀
+          startupProbe:
+            tcpSocket:
+              port: 8125
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 8125
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          # 存活探针：进程假死（如线程耗尽）时自动重启
+          livenessProbe:
+            tcpSocket:
+              port: 8125
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
+          # 先从端点摘除再停机，给进行中的请求留出缓冲
+          lifecycle:
+            preStop:
+              exec:
+                command: ['sh', '-c', 'sleep 15']
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mao-ai-code-app
+  namespace: yu-ai-code
+  labels:
+    app: mao-ai-code-app
+spec:
+  selector:
+    app: mao-ai-code-app
+  ports:
+    - port: 8125
+      targetPort: 8125
+  type: ClusterIP
